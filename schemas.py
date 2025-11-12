@@ -1,48 +1,53 @@
 """
-Database Schemas
+Database Schemas for Smart Restaurant
 
-Define your MongoDB collection schemas here using Pydantic models.
-These schemas are used for data validation in your application.
-
-Each Pydantic model represents a collection in your database.
-Model name is converted to lowercase for the collection name:
-- User -> "user" collection
-- Product -> "product" collection
-- BlogPost -> "blogs" collection
+Each Pydantic model represents a MongoDB collection. The collection name
+is the lowercase of the class name (e.g., MenuItem -> "menuitem").
 """
+from typing import List, Optional, Literal
+from pydantic import BaseModel, Field, HttpUrl
 
-from pydantic import BaseModel, Field
-from typing import Optional
+# -----------------------------
+# Core Collections
+# -----------------------------
 
-# Example schemas (replace with your own):
+class MenuItem(BaseModel):
+    name: str = Field(..., description="Dish name")
+    description: Optional[str] = Field(None, description="Dish description")
+    price: float = Field(..., ge=0, description="Price in local currency")
+    category: Optional[str] = Field(None, description="Category like Starters, Main Course")
+    image_url: Optional[HttpUrl] = Field(None, description="Image URL for the dish")
+    is_available: bool = Field(True, description="Whether this item is currently available")
 
-class User(BaseModel):
-    """
-    Users collection schema
-    Collection name: "user" (lowercase of class name)
-    """
-    name: str = Field(..., description="Full name")
-    email: str = Field(..., description="Email address")
-    address: str = Field(..., description="Address")
-    age: Optional[int] = Field(None, ge=0, le=120, description="Age in years")
-    is_active: bool = Field(True, description="Whether user is active")
+class Table(BaseModel):
+    number: int = Field(..., ge=1, description="Table number visible in the restaurant")
+    label: Optional[str] = Field(None, description="Optional label like Window-1")
+    qr_path: Optional[str] = Field(None, description="Path/URL to generated QR code image for this table")
 
-class Product(BaseModel):
-    """
-    Products collection schema
-    Collection name: "product" (lowercase of class name)
-    """
-    title: str = Field(..., description="Product title")
-    description: Optional[str] = Field(None, description="Product description")
-    price: float = Field(..., ge=0, description="Price in dollars")
-    category: str = Field(..., description="Product category")
-    in_stock: bool = Field(True, description="Whether product is in stock")
+class OrderItem(BaseModel):
+    item_id: str = Field(..., description="Menu item ObjectId as string")
+    name: str = Field(..., description="Item name at the time of order")
+    price: float = Field(..., ge=0, description="Unit price at the time of order")
+    quantity: int = Field(..., ge=1, description="Quantity ordered")
 
-# Add your own schemas here:
-# --------------------------------------------------
+class Order(BaseModel):
+    table_id: str = Field(..., description="Table ObjectId as string")
+    items: List[OrderItem]
+    subtotal: float = Field(..., ge=0)
+    payment_method: Literal["online", "cash"] = Field(...)
+    status: Literal["pending", "preparing", "served", "completed", "cancelled"] = Field("pending")
+    payment_status: Literal["unpaid", "pending", "paid", "failed"] = Field("unpaid")
+    notes: Optional[str] = None
 
-# Note: The Flames database viewer will automatically:
-# 1. Read these schemas from GET /schema endpoint
-# 2. Use them for document validation when creating/editing
-# 3. Handle all database operations (CRUD) directly
-# 4. You don't need to create any database endpoints!
+class PaymentRecord(BaseModel):
+    order_id: str = Field(..., description="Order ObjectId as string")
+    provider: Literal["razorpay", "stripe", "paytm", "mock"] = Field("mock")
+    amount: float = Field(..., ge=0)
+    currency: str = Field("INR")
+    status: Literal["created", "pending", "succeeded", "failed"] = Field("created")
+    transaction_id: Optional[str] = None
+    metadata: Optional[dict] = Field(default_factory=dict)
+
+# Notes:
+# - Use create_document/get_documents from database.py for inserts/queries
+# - You can import these classes for request validation in FastAPI routes
